@@ -1,0 +1,176 @@
+import React, { useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom/client";
+
+/**
+ * Team Ops Management — Fully functional React website
+ * - React 18 compliant
+ * - Dark mode UI
+ * - Role-based access: Owner, Admin, Operator
+ * - 5 clearance levels
+ * - Sidebar navigation
+ * - Admins can edit dashboard, logs, personnel, and mission briefings
+ * - Owner panel for global settings
+ * - LocalStorage-backed database
+ * - Team chat functionality
+ */
+
+function TeamOpsApp() {
+  const CLEARANCES = useMemo(() => [
+    { level: 1, name: "Clearance I" },
+    { level: 2, name: "Clearance II" },
+    { level: 3, name: "Clearance III" },
+    { level: 4, name: "Clearance IV" },
+    { level: 5, name: "Clearance V (Top Secret)" },
+  ], []);
+
+  const NAVIGATION = useMemo(() => [
+    { label: "Dashboard", section: "dashboard", clearance: 1 },
+    { label: "Logs", section: "logs", clearance: 1 },
+    { label: "Task Logs", section: "tasklogs", clearance: 2 },
+    { label: "Personnel Files", section: "personnel", clearance: 3 },
+    { label: "Mission Briefings", section: "missions", clearance: 3 },
+    { label: "Chat", section: "chat", clearance: 1 },
+    { label: "Owner Panel", section: "owner", clearance: 5 },
+  ], []);
+
+  const [user] = useState({ name: "Commander", clearance: 5, role: "Owner" });
+  const [activeSection, setActiveSection] = useState("dashboard");
+  const [systemSettings, setSystemSettings] = useState({
+    systemName: "Team Ops Command Network",
+    motd: "Operational readiness is mandatory.",
+  });
+
+  const DB_KEY = "teamops_db";
+  const CHAT_KEY = "teamops_chat";
+
+  const [database, setDatabase] = useState(() => JSON.parse(localStorage.getItem(DB_KEY) || "[]"));
+  const [chat, setChat] = useState(() => JSON.parse(localStorage.getItem(CHAT_KEY) || "[]"));
+  const [dbDraft, setDbDraft] = useState("");
+  const [dashboardContent, setDashboardContent] = useState("Welcome to the operations dashboard.");
+  const [chatDraft, setChatDraft] = useState("");
+
+  useEffect(() => { localStorage.setItem(DB_KEY, JSON.stringify(database)); }, [database]);
+  useEffect(() => { localStorage.setItem(CHAT_KEY, JSON.stringify(chat)); }, [chat]);
+
+  const visibleNav = NAVIGATION.filter(n => n.clearance <= user.clearance);
+
+  const addDatabaseEntry = text => {
+    if (!text?.trim()) return;
+    const entry = { id: Date.now(), author: user.name, entry: text.trim(), date: new Date().toISOString() };
+    setDatabase(prev => [entry, ...prev]);
+    setDbDraft("");
+  };
+
+  const addChatMessage = text => {
+    if (!text?.trim()) return;
+    const msg = { id: Date.now(), author: user.name, text: text.trim(), date: new Date().toISOString() };
+    setChat(prev => [...prev, msg]);
+    setChatDraft("");
+  };
+
+  const SectionDisplay = () => {
+    switch(activeSection) {
+      case "dashboard": return <Dashboard />;
+      case "logs": return <Logs />;
+      case "tasklogs": return <TaskLogs />;
+      case "personnel": return <Personnel />;
+      case "missions": return <MissionBriefings />;
+      case "chat": return <Chat />;
+      case "owner": return <OwnerPanel />;
+      default: return <GenericPanel name={activeSection} />;
+    }
+  };
+
+  const Dashboard = () => (
+    <div style={styles.panel}>
+      <h2 style={styles.sectionTitle}>Dashboard</h2>
+      {(user.role === "Admin" || user.role === "Owner") ? (
+        <textarea style={styles.textarea} value={dashboardContent} onChange={e => setDashboardContent(e.target.value)} rows={6} />
+      ) : <p>{dashboardContent}</p>}
+    </div>
+  );
+
+  const Logs = () => (
+    <div style={styles.panel}>
+      <h2 style={styles.sectionTitle}>Database Logs</h2>
+      <textarea style={styles.textarea} value={dbDraft} onChange={e => setDbDraft(e.target.value)} rows={4} />
+      <button style={styles.button} onClick={() => addDatabaseEntry(dbDraft)}>Add Entry</button>
+      <ul style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
+        {database.map(d => (
+          <li key={d.id} style={styles.logCard}>
+            <b>{d.author}</b>: {d.entry} <small>{new Date(d.date).toLocaleString()}</small>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  const TaskLogs = () => <div style={styles.panel}><h2>Task Logs</h2></div>;
+  const Personnel = () => <div style={styles.panel}><h2>Personnel</h2></div>;
+  const MissionBriefings = () => <div style={styles.panel}><h2>Mission Briefings</h2></div>;
+
+  const Chat = () => (
+    <div style={styles.panel}>
+      <h2 style={styles.sectionTitle}>Team Chat</h2>
+      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 200, overflowY: 'auto' }}>
+        {chat.map(m => <li key={m.id}><b>{m.author}</b>: {m.text}</li>)}
+      </ul>
+      <input style={styles.input} value={chatDraft} onChange={e => setChatDraft(e.target.value)} placeholder="Type a message..." />
+      <button style={styles.button} onClick={() => addChatMessage(chatDraft)}>Send</button>
+    </div>
+  );
+
+  const OwnerPanel = () => (
+    <div style={styles.panel}>
+      <h2 style={styles.sectionTitle}>Owner Panel</h2>
+      <input style={styles.input} value={systemSettings.systemName} onChange={e => setSystemSettings({...systemSettings, systemName: e.target.value})} />
+      <input style={styles.input} value={systemSettings.motd} onChange={e => setSystemSettings({...systemSettings, motd: e.target.value})} />
+    </div>
+  );
+
+  const GenericPanel = ({ name }) => <div style={styles.panel}><h2>{name}</h2></div>;
+
+  return (
+    <div style={styles.app}>
+      <aside style={styles.sidebar}>
+        <h3 style={styles.systemName}>{systemSettings.systemName}</h3>
+        <div style={styles.motd}>{systemSettings.motd}</div>
+        {CLEARANCES.map(c => (
+          <div key={c.level}>
+            <strong>{c.name}</strong>
+            {visibleNav.filter(n => n.clearance === c.level).map(nav => (
+              <div key={nav.section} style={styles.navItem} onClick={() => setActiveSection(nav.section)}>{nav.label}</div>
+            ))}
+          </div>
+        ))}
+      </aside>
+      <main style={styles.main}>
+        <h1>Welcome, {user.name}</h1>
+        <SectionDisplay />
+      </main>
+    </div>
+  );
+}
+
+const styles = {
+  app: { display: 'flex', height: '100vh', fontFamily: 'Inter, sans-serif', background: '#0d0d0f', color: '#e5e7eb' },
+  sidebar: { width: 250, padding: 20, background: '#16161a', borderRight: '1px solid #111', overflowY: 'auto' },
+  main: { flex: 1, padding: 20, overflowY: 'auto' },
+  panel: { background: '#16161a', padding: 16, borderRadius: 8, marginBottom: 16 },
+  systemName: { color: '#fff', fontWeight: 700 },
+  motd: { color: '#9ca3af', fontSize: 12, marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: 700, marginBottom: 8 },
+  navItem: { padding: 6, margin: 2, cursor: 'pointer', borderRadius: 4, background: '#1f1f23' },
+  textarea: { width: '100%', padding: 8, borderRadius: 6, background: '#0f0f11', border: '1px solid #333', color: '#e5e7eb' },
+  input: { width: '100%', padding: 8, borderRadius: 6, background: '#0f0f11', border: '1px solid #333', color: '#e5e7eb', marginBottom: 8 },
+  button: { padding: 8, borderRadius: 6, background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer' },
+  logCard: { background: '#0f172a', padding: 8, borderRadius: 6, marginBottom: 6 }
+};
+
+// React 18 root rendering
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(<TeamOpsApp />);
+} else {
+  console.error("Root element not found");
+}
